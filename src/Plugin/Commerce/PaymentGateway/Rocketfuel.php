@@ -12,11 +12,11 @@ use Symfony\Component\HttpFoundation\Request;
  * Provides the Rocketfuel Standard Off-site payment gateway.
  *
  * @CommercePaymentGateway(
- *   id = "rocketfuel_iframe",
+ *   id = "rocketfuel",
  *   label = "Rocketfuel Standard (Off-site)",
  *   display_label = "Pay with Rocketfuel",
  *   forms = {
- *     "offsite-payment" = "Drupal\commerce_rocketfuel\PluginForm\RocketfuelIframeForm",
+ *     "offsite-payment" = "Drupal\commerce_rocketfuel\PluginForm\RocketfuelForm",
  *   },
  *   payment_method_types = {"credit_card"},
  *   credit_card_types = {
@@ -25,7 +25,7 @@ use Symfony\Component\HttpFoundation\Request;
  *   requires_billing_information = FALSE,
  * )
  */
-class RocketfuelIframe extends OffsitePaymentGatewayBase implements RocketfuelIframeInterface
+class Rocketfuel extends OffsitePaymentGatewayBase implements RocketfuelInterface
 {
 
     /**
@@ -65,7 +65,7 @@ class RocketfuelIframe extends OffsitePaymentGatewayBase implements RocketfuelIf
             'public_key' => '',
             'password' => '',
             'email' => '',
-            'environment' => ''
+            'environment' => 'production'
         ] + parent::defaultConfiguration();
     }
     /**

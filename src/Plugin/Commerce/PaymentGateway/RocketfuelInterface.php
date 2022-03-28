@@ -7,7 +7,7 @@ use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\OffsitePaymentGateway
 /**
  * Provides the interface for the Rocketfuel payment gateway.
  */
-interface RocketfuelIframeInterface extends OffsitePaymentGatewayInterface {
+interface RocketfuelInterface extends OffsitePaymentGatewayInterface {
 
   /**
    * Get the Rocketfuel API Secret key set for the payment gateway.
