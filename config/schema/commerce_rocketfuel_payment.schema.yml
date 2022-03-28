@@ -1,0 +1,15 @@
+commerce_payment.commerce_payment_gateway.plugin.rocketfuel_iframe:
+  type: commerce_payment_gateway_configuration
+  mapping:
+    password:
+      type: string
+      label: 'Secret key'
+    email:
+      type: string
+      label: 'Email'
+    public_key:
+      type: string
+      label: 'Public Key'
+    environment:
+      type: string
+      label: 'Environment'

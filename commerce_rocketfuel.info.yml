@@ -1,0 +1,7 @@
+name: Commerce Rocketfuel
+type: module
+description: Provides Commerce integration for the Rocketfuel Gateway.
+core_version_requirement: '^8 || ^9'
+package: Commerce (contrib)
+dependencies:
+  - commerce:commerce_payment

@@ -1,0 +1,9 @@
+    email:
+      type: string
+      label: 'Email'
+    public_key:
+      type: string
+      label: 'Public Key'
+    environment:
+      type: string
+      label: 'Environment'
