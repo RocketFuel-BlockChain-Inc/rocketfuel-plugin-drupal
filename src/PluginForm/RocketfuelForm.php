@@ -22,78 +22,27 @@ class RocketfuelForm extends BasePaymentOffsiteForm
         $payment = $this->entity;
         /** @var \Drupal\commerce_rocketfuel\Plugin\Commerce\PaymentGateway\RocketfuelInterface $plugin */
         $plugin = $payment->getPaymentGateway()->getPlugin();
-        $environment = $plugin->getEnvironment();
 
         /** @var \Drupal\commerce_order\Entity\OrderInterface $order */
         $order = $payment->getOrder();
+        $billingAddress = $order->getBillingProfile()->get('address');
 
-        // Adds information about the billing profile.
-        if ($billing_profile = $order->getBillingProfile()) {
-            /** @var \Drupal\address\AddressInterface $address */
-            $address = $billing_profile->get('address')->first();
-            $fields = [
-                [
-                    'display_name' => 'Billing First Name',
-                    'variable_name' => 'first_name',
-                    'value' => $address->getGivenName(),
-                ],
-                [
-                    'display_name' => 'Billing Surname',
-                    'variable_name' => 'last_name',
-                    'value' => $address->getFamilyName(),
-                ]
-            ];
-        }
 
-        // Get total order price.
-        $amount = $payment->getAmount();
-
-        // $transactionData = [
-        //   'reference' => $order->uuid(),
-        //   'amount' => $amount->getNumber() * 100, // Convert to kobo.
-        //   'email' => $order->getEmail(),
-        //   'callback_url' => $form['#return_url'],
-        //   'metadata' => [
-        //     'cancel_action' => $form['#cancel_url'],
-        //   ],
-        // ];
-        $transactionData = [
-            'reference' => 'ddddddd',
-            'amount' => 100, // Convert to kobo.
-            'email' => 're@gmail.com',
-            'callback_url' => $form['#return_url'],
-            'metadata' => [
-                'cancel_action' => $form['#cancel_url'],
-            ],
-        ];
-        if (isset($fields)) {
-            $transactionData['metadata']['custom_fields'] = $fields;
-        }
-        // if ($gateway_mode == 'live') {
-        //     $form['#attached']['library'][] = 'commerce_rave/rave_live';
-        //   }
-        //   else {
-        //     $form['#attached']['library'][] = 'commerce_rave/rave_staging';
-        //   }
-
-        //   $form['#attached']['library'][] = 'commerce_rave/rave';
+        $user = \Drupal\user\Entity\User::load(\Drupal::currentUser()->id());
+        $uuid = $user->uuid();
 
         $options = [
-            "PBFPubKey" => $plugin->getPublicKey(),
-            "amount" => $payment_amount,
+            "merchant_auth" => $this->getMerchantAuth($plugin->getPublicKey(), $plugin->getMerchantId()),
+            "amount" => /*$payment_amount*/$payment->getAmount()->getNumber(),
             "customer_email" => $order->getEmail(),
             "customer_firstname" => $billingAddress->getGivenName(),
             "customer_lastname" => $billingAddress->getFamilyName(),
-            "custom_logo" => Url::fromUri('internal:' . theme_get_setting('logo.url'), ['absolute' => TRUE])
-                ->toString(),
-            "txref" => $plugin->getTransactionReferencePrefix() . '-' . $payment->getOrderId(),
-            "payment_method" => 'both',
+            "orderId" => $payment->getOrderId(),
+            "uuid" => $uuid,
             "country" => $billingAddress->getCountryCode(),
             "currency" => $payment->getAmount()->getCurrencyCode(),
-            "custom_title" => \Drupal::config('system.site')->get('name'),
-            "custom_description" => \Drupal::config('system.site')->get('slogan'),
-            "pay_button_text" => $plugin->getPayButtonText(),
             "redirect_url" => $form['#return_url'],
+            "endpoint"=>$this->getEndpoint($plugin->getEnvironment())
         ];
 
 
@@ -170,5 +119,42 @@ class RocketfuelForm extends BasePaymentOffsiteForm
         $hash = hash('sha256', $completeHash);
 
         $this->integrityHash = $hash;
+    }
+
+    private function getMerchantAuth($public_key, $merchant_id)
+    {
+        $cert = $public_key;
+        $to_crypt = $merchant_id;
+
+        $public_key = openssl_pkey_get_public($cert);
+
+        $key_lenght = openssl_pkey_get_details($public_key);
+
+        $part_len = $key_lenght['bits'] / 8 - 11;
+
+        $parts = str_split($to_crypt, $part_len);
+
+        foreach ($parts as $part) {
+
+            $encrypted_temp = '';
+
+            openssl_public_encrypt($part, $encrypted_temp, $public_key, OPENSSL_PKCS1_OAEP_PADDING);
+
+            $out .=  $encrypted_temp;
+        }
+
+        return base64_encode($out);
+    }
+
+    public function getEndpoint($environment)
+    {
+        $environmentData = array(
+            'prod' => 'https://app.rocketfuelblockchain.com/api',
+            'dev' => 'https://dev-app.rocketdemo.net/api',
+            'stage2' => 'https://qa-app.rocketdemo.net/api',
+            'preprod' => 'https://preprod-app.rocketdemo.net/api',
+        );
+
+        return isset($environmentData[$environment]) ? $environmentData[$environment] : 'https://app.rocketfuelblockchain.com/api';
     }
 }

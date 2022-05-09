@@ -35,6 +35,15 @@ class Rocketfuel extends OffsitePaymentGatewayBase implements RocketfuelInterfac
     {
         return $this->configuration['public_key'];
     }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function getMerchantId()
+    {
+        return $this->configuration['merchant_id'];
+    }
+
     /**
      * {@inheritdoc}
      */
@@ -63,6 +72,7 @@ class Rocketfuel extends OffsitePaymentGatewayBase implements RocketfuelInterfac
     {
         return [
             'public_key' => '',
+            'merchant_id' => '',
             'password' => '',
             'email' => '',
             'environment' => 'production'
@@ -81,6 +91,15 @@ class Rocketfuel extends OffsitePaymentGatewayBase implements RocketfuelInterfac
             '#default_value' => $this->getPublicKey(),
             '#required' => TRUE,
         ];
+
+        $form['merchant_id'] = [
+            '#type' => 'textfield',
+            '#title' => $this->t('Merchant ID'),
+            '#default_value' => $this->getMerchantId(),
+            '#required' => TRUE,
+        ];
+
+
         $form['password'] = [
             '#type' => 'password',
             '#title' => $this->t('Password'),
@@ -120,6 +139,8 @@ class Rocketfuel extends OffsitePaymentGatewayBase implements RocketfuelInterfac
                 $form_state->setError($form['public_key'], $this->t('A Valid rocketfuel Secret Key is needed'));
                 
             }
+
+            //validate the merchant id
         }
     }
     /**
@@ -132,5 +153,11 @@ class Rocketfuel extends OffsitePaymentGatewayBase implements RocketfuelInterfac
             $values = $form_state->getValue($form['#parents']);
             $this->configuration['public_key'] = $values['public_key'];
         }
+    }
+
+    public function onCancel(OrderInterface $order, Request $request) {
+        $this->messenger()->addMessage($this->t('You have canceled checkout at RocketFuel but may resume the checkout process here when you are ready.', [
+            '@gateway' => $this->getDisplayLabel(),
+        ]));
     }
 }
