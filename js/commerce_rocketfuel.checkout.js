@@ -167,10 +167,10 @@ class getPaidSetup{
 
     startPayment(autoTriggerState = true) {
 
-        /*if (!autoTriggerState) {
+        if (!autoTriggerState) {
             document.getElementById('rocketfuel_retrigger_payment_button').innerText = "Preparing Payment window...";
             this.watchIframeShow = true;
-        }*/
+        }
 
         // document.getElementById('rocketfuel_retrigger_payment_button').disabled = true;
 
@@ -193,16 +193,26 @@ class getPaidSetup{
                     //todo trigger the onClose
                     break;
                 case 'rocketfuel_new_height':
-                    /*if (engine.watchIframeShow) {
-                        engine.prepareProgressMessage();
-                        engine.watchIframeShow = false;
+                    if (this.watchIframeShow) {
+                        this.prepareProgressMessage();
+                        this.watchIframeShow = false;
 
-                    }*/
+                    }
                     break;
                 default:
                     break;
             }
 
         })
+    }
+
+    prepareProgressMessage() {
+
+        //hide retrigger button
+        document.getElementById('rocketfuel_retrigger_payment_button').innerText = "Resume"; //revert trigger button message
+
+        document.getElementById('rocketfuel_retrigger_payment').style.display = 'none';
+        document.getElementById('rocketfuel_before_payment').style.display = 'block';
+
     }
 }
