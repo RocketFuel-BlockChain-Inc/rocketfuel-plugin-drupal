@@ -1,8 +1,8 @@
 checkout:
   version: VERSION
   js:
+    "https://d3rpjm0wf8u2co.cloudfront.net/static/rkfl.js": {}
     js/commerce_rocketfuel.checkout.js: {}
-    https://d3rpjm0wf8u2co.cloudfront.net/static/rkfl.js: {}
   dependencies:
     - core/jquery
     - core/jquery.once

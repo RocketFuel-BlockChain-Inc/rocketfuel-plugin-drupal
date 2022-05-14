@@ -18,14 +18,14 @@ class RocketfuelForm extends BasePaymentOffsiteForm
     {
         $form = parent::buildConfigurationForm($form, $form_state);
 
-        /** @var \Drupal\commerce_payment\Entity\PaymentInterface $payment */
+        /** @var Drupalcommerce_paymentEntityPaymentInterface $payment */
         $payment = $this->entity;
-        /** @var \Drupal\commerce_rocketfuel\Plugin\Commerce\PaymentGateway\RocketfuelInterface $plugin */
+        /** @var Drupalcommerce_rocketfuelPluginCommercePaymentGatewayRocketfuelInterface $plugin */
         $plugin = $payment->getPaymentGateway()->getPlugin();
 
-        /** @var \Drupal\commerce_order\Entity\OrderInterface $order */
+        /** @var Drupalcommerce_orderEntityOrderInterface $order */
         $order = $payment->getOrder();
-        $billingAddress = $order->getBillingProfile()->get('address');
+        $billingAddress = $order->getBillingProfile()->address->first();
 
 
         $user = \Drupal\user\Entity\User::load(\Drupal::currentUser()->id());
@@ -42,19 +42,33 @@ class RocketfuelForm extends BasePaymentOffsiteForm
             "country" => $billingAddress->getCountryCode(),
             "currency" => $payment->getAmount()->getCurrencyCode(),
             "redirect_url" => $form['#return_url'],
-            "endpoint"=>$this->getEndpoint($plugin->getEnvironment())
+            "endpoint"=>$this->getEndpoint($plugin->getEnvironment()),
+            "environment"=>$plugin->getEnvironment(),
         ];
 
+        $options['continueurl'] = $form['#return_url'];
+        $options['cancelurl'] = $form['#cancel_url'];
 
+        //$this->calculateChecksum($options);
+
+        //$options = array_merge($options, ['integrity_hash' => $this->integrityHash]);
+
+        $form['#attached']['drupalSettings']['rocketfuel'] = json_encode($options);
+        $form['#attached']['library'][] = 'commerce_rocketfuel/checkout';
+
+
+        /*$form['actions'] = ['#type' => 'actions'];
+        $form['actions']['submit'] = [
+          '#type' => 'submit',
+          '#value' => $this->t('Accept instalments and complete purchase'),
+        ];
+        $form['actions']['cancel'] = [
+          '#type' => 'link',
+          '#title' => $this->t('Cancel'),
+          '#url' => Url::fromUri($form['#cancel_url']),
+        ];*/
 
         $form = $this->buildRedirectForm($form, $form_state, '', $options, '');
-
-        $this->calculateChecksum($options);
-
-        $options = array_merge($options, ['integrity_hash' => $this->integrityHash]);
-
-        $form['#attached']['drupalSettings']['rocketfuel']['transactionData'] = json_encode($options);
-
         return $form;
     }
     /**
@@ -81,7 +95,7 @@ class RocketfuelForm extends BasePaymentOffsiteForm
         // if (array_key_exists('hosted_payment', $data) && $data['hosted_payment'] === 1) {
         //     $helpMessage = t('Please wait while you are redirected to the payment server. If nothing happens within 10 seconds, please click on the button below.');
         // } else {
-            $helpMessage = t('Please wait while the payment server loads. If nothing happens within 10 seconds, please click on the button below.');
+        $helpMessage = t('Please wait while the payment server loads. If nothing happens within 10 seconds, please click on the button below.');
         // }
 
         $form['commerce_message'] = [
@@ -112,7 +126,7 @@ class RocketfuelForm extends BasePaymentOffsiteForm
             $hashedPayload .= $value;
         }
 
-        /** @var \Drupal\commerce_rave\Plugin\Commerce\PaymentGateway\RocketfuelInterface $plugin */
+        /** @var Drupalcommerce_ravePluginCommercePaymentGatewayRocketfuelInterface $plugin */
         $plugin = $this->plugin;
 
         $completeHash = $hashedPayload . $plugin->getPassword();
@@ -123,6 +137,7 @@ class RocketfuelForm extends BasePaymentOffsiteForm
 
     private function getMerchantAuth($public_key, $merchant_id)
     {
+        $out = "";
         $cert = $public_key;
         $to_crypt = $merchant_id;
 
@@ -148,13 +163,13 @@ class RocketfuelForm extends BasePaymentOffsiteForm
 
     public function getEndpoint($environment)
     {
-        $environmentData = array(
+        $environmentData = [
             'prod' => 'https://app.rocketfuelblockchain.com/api',
             'dev' => 'https://dev-app.rocketdemo.net/api',
             'stage2' => 'https://qa-app.rocketdemo.net/api',
             'preprod' => 'https://preprod-app.rocketdemo.net/api',
-        );
+        ];
 
-        return isset($environmentData[$environment]) ? $environmentData[$environment] : 'https://app.rocketfuelblockchain.com/api';
+        return isset($environmentData[$environment]) ? $environmentData[$environment] : 'https://qa-app.rocketdemo.net/api';
     }
 }

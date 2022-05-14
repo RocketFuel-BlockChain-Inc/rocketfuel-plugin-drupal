@@ -1,32 +1,10 @@
-(function ($, Drupal, drupalSettings) {
-
-    'use strict';
-  
-    Drupal.behaviors.raveForm = {
-      attach: function (context) {
-        var options = drupalSettings.rocketfuel.transactionData;
-  
-        $('.payment-redirect-form', context).on('submit', function () {
-          let pay = new getPaidSetup(JSON.parse(options));
-          pay.init()
-  
-          return false;
-        });
-  
-        // Trigger form submission when user visits Payment page.
-        $('.payment-redirect-form', context).once('getPaid').trigger('submit');
-      }
-    };
-  
-  })(jQuery, Drupal, drupalSettings);
-
 class getPaidSetup{
     constructor(options) {
         this.merchantAuth = options.merchant_auth
         this.amount = options.amount
         this.email = options.customer_email
         this.lastname = options.customer_lastname
-        this.firstname = options.cutomer_lastname
+        this.firstname = options.customer_firstname
         this.uuid = options.uuid
         this.orderId = options.orderId
         this.country = options.country
@@ -50,6 +28,7 @@ class getPaidSetup{
         }
 
         console.log('Done initiating RKFL');
+        console.log(this.environment)
 
         this.windowListener();
 
@@ -93,11 +72,11 @@ class getPaidSetup{
                         localStorage.removeItem('access');
 
                     }
-
                     rkflToken = localStorage.getItem('rkfl_token');
 
                     if (!rkflToken) {
 
+                        //use this.environement when it is correct
                         response = await this.rkfl.rkflAutoSignUp(payload, this.environment);
 
                         this.setLocalStorage('rkfl_email', this.email);
@@ -113,6 +92,7 @@ class getPaidSetup{
                     const rkflConfig = {
                         uuid: this.uuid,
                         callback: this.updateOrder,
+                        //use this.environement when it is correct
                         environment: this.environment
                     }
                     if (rkflToken) {
@@ -132,7 +112,6 @@ class getPaidSetup{
                 }
 
             }
-
             resolve('no auto');
         })
 
@@ -216,3 +195,21 @@ class getPaidSetup{
 
     }
 }
+
+(function ($, Drupal, drupalSettings) {
+    'use strict';
+
+    Drupal.behaviors.rocketForm = {
+        attach: function (context) {
+            var data = drupalSettings.rocketfuel;
+            // Your custom JavaScript code
+            console.log(JSON.parse(data))
+            const pay = new getPaidSetup(JSON.parse(data));
+            pay.init()
+
+            return false
+        }
+
+    };
+
+}(jQuery, Drupal, drupalSettings));
