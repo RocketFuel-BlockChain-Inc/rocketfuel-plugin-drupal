@@ -174,4 +174,49 @@ class Rocketfuel extends OffsitePaymentGatewayBase implements RocketfuelInterfac
             '@gateway' => $this->getDisplayLabel(),
         ]));
     }
+
+    public function onNotify(Request $request) {
+        parent::onNotify($request);
+
+        if (!empty($this->configuration['api_logging']['response'])) {
+            \Drupal::logger('commerce_rocketfuel')
+                ->debug('e-Commerce notification: <pre>@body</pre>', [
+                    '@body' => var_export($request->query->all(), TRUE),
+                ]);
+        }
+
+
+        $status = $request->request->get('status');
+        $mode = $request->request->get('mode');
+        $payment_id = $request->request->get('payment_id');
+
+        $payment_storage = $this->entityTypeManager->getStorage('commerce_payment');
+        $payment = $payment_storage->load($payment_id);
+
+
+        switch ($mode) {
+            case 'Bank/Exchange':
+                if($status == 0){
+                    $payment->set('state', 'completed');
+                    $payment->save();
+                    return json_encode(true);
+                }
+                break;
+            case 'Wallet':
+                if($status == 'completed'){
+                    $payment->set('state', 'completed');
+                    $payment->save();
+                    /*$capture_transition = $payment->getState()->getWorkflow()->getTransition('capture');
+                    $payment->getState()->applyTransition($capture_transition);
+                    $payment->save();*/
+                    return json_encode(true);
+                }
+                break;
+            default:
+                return json_encode(false);
+                break;
+        }
+
+
+    }
 }

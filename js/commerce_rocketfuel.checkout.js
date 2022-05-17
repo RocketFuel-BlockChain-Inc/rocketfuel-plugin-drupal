@@ -6,15 +6,15 @@ class getPaidSetup{
         this.lastname = options.customer_lastname
         this.firstname = options.customer_firstname
         this.uuid = options.uuid
-        this.orderId = options.orderId
-        this.country = options.country
-        this.currency = options.currency
         this.endpoint = options.endpoint
-        this.redirect_url = options.redirect_url
         this.environment = options.environment
         this.rkfl = new RocketFuel({
             environment: options.environment
         });
+
+        localStorage.setItem('notifyUrl', options.notifyUrl);
+        localStorage.setItem('payment_id', options.payment_id);
+        console.log(options)
     }
 
     async init() {
@@ -28,7 +28,6 @@ class getPaidSetup{
         }
 
         console.log('Done initiating RKFL');
-        console.log(this.environment)
 
         this.windowListener();
 
@@ -53,7 +52,6 @@ class getPaidSetup{
 
 
             if (this.firstname && this.email && this.merchantAuth) {
-                console.log('in')
                 payload = {
                     firstName: this.firstname,
                     lastName: this.lastname,
@@ -93,7 +91,7 @@ class getPaidSetup{
                         uuid: this.uuid,
                         callback: this.updateOrder,
                         //use this.environement when it is correct
-                        environment: this.environment
+                        environment: this.environment,
                     }
                     if (rkflToken) {
                         rkflConfig.token = rkflToken;
@@ -123,15 +121,18 @@ class getPaidSetup{
 
     updateOrder(result) {
         try {
-            let result_status = parseInt(result.status);
+            let result_status = String(result.status);
+            let payment_mode = String(result.paymentMode);
 
             let fd = new FormData();
-            fd.append("order_id", this.orderId);
             fd.append("status", result_status);
-            fetch(this.redirect_url, {
+            fd.append("mode", payment_mode);
+            fd.append("payment_id", String(localStorage.getItem('payment_id')));
+            fetch(String(localStorage.getItem('notifyUrl')), {
                 method: "POST",
-                body: fd
-            }).then(res => res.json()).then(result => {
+                body: fd,
+                redirect: 'follow'
+            }).then(res => res.text()).then(result => {
                 console.log(result)
 
             }).catch(e => {
@@ -203,7 +204,6 @@ class getPaidSetup{
         attach: function (context) {
             var data = drupalSettings.rocketfuel;
             // Your custom JavaScript code
-            console.log(JSON.parse(data))
             const pay = new getPaidSetup(JSON.parse(data));
             pay.init()
 

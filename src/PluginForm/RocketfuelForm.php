@@ -10,16 +10,17 @@ use Drupal\Core\Url;
 
 class RocketfuelForm extends BasePaymentOffsiteForm
 {
-    protected $integrityHash;
-    /**
-     * {@inheritdoc}
-     */
+    use RocketFuelPaymentHelper;
+
     public function buildConfigurationForm(array $form, FormStateInterface $form_state)
     {
         $form = parent::buildConfigurationForm($form, $form_state);
 
         /** @var Drupalcommerce_paymentEntityPaymentInterface $payment */
         $payment = $this->entity;
+
+        $payment->save();
+
         /** @var Drupalcommerce_rocketfuelPluginCommercePaymentGatewayRocketfuelInterface $plugin */
         $plugin = $payment->getPaymentGateway()->getPlugin();
 
@@ -28,47 +29,54 @@ class RocketfuelForm extends BasePaymentOffsiteForm
         $billingAddress = $order->getBillingProfile()->address->first();
 
 
-        $user = \Drupal\user\Entity\User::load(\Drupal::currentUser()->id());
-        $uuid = $user->uuid();
+        foreach($order->getItems() as $item){
+            $options['cart'][] = [
+                'id' => $item->getPurchasedEntityId(),
+                'name' => $item->getTitle(),
+                'price' => $item->getUnitPrice()->getNumber(),
+                'quantity' => $item->getQuantity()
+            ];
+        }
+
+        $data = [
+            'cred' => [
+                'email'=>$plugin->getEmail(),
+                'password'=>$plugin->getPassword()
+            ],
+            'endpoint' => $this->getEndpoint($plugin->getEnvironment()),
+            'body' => [
+                'amount' => (string)$payment->getAmount()->getNumber(),
+                'cart' => $options['cart'],
+                'merchant_id' => $plugin->getMerchantId(),
+                'currency' =>  $payment->getAmount()->getCurrencyCode(),
+                'order' => (string)$payment->getOrderId(),
+                'redirectUrl' => \Drupal::request()->getSchemeAndHttpHost().'/payment/notify/'.$payment->getPaymentGateway()->id()
+            ]
+        ];
 
         $options = [
-            "merchant_auth" => $this->getMerchantAuth($plugin->getPublicKey(), $plugin->getMerchantId()),
+            "merchant_auth" => $this->getMerchantAuth($plugin->getMerchantId()),
             "amount" => /*$payment_amount*/$payment->getAmount()->getNumber(),
             "customer_email" => $order->getEmail(),
             "customer_firstname" => $billingAddress->getGivenName(),
             "customer_lastname" => $billingAddress->getFamilyName(),
-            "orderId" => $payment->getOrderId(),
-            "uuid" => $uuid,
-            "country" => $billingAddress->getCountryCode(),
-            "currency" => $payment->getAmount()->getCurrencyCode(),
+            "uuid" => $this->getUUID($data),
             "redirect_url" => $form['#return_url'],
-            "endpoint"=>$this->getEndpoint($plugin->getEnvironment()),
             "environment"=>$plugin->getEnvironment(),
+            "notifyUrl" => \Drupal::request()->getSchemeAndHttpHost().'/payment/notify/'.$payment->getPaymentGateway()->id()
         ];
 
         $options['continueurl'] = $form['#return_url'];
-        $options['cancelurl'] = $form['#cancel_url'];
+        //$options['cancelurl'] = $form['#cancel_url'];
+        //$payment->save();
+        $options['payment_id'] = $payment->id();
 
-        //$this->calculateChecksum($options);
-
-        //$options = array_merge($options, ['integrity_hash' => $this->integrityHash]);
 
         $form['#attached']['drupalSettings']['rocketfuel'] = json_encode($options);
         $form['#attached']['library'][] = 'commerce_rocketfuel/checkout';
 
 
-        /*$form['actions'] = ['#type' => 'actions'];
-        $form['actions']['submit'] = [
-          '#type' => 'submit',
-          '#value' => $this->t('Accept instalments and complete purchase'),
-        ];
-        $form['actions']['cancel'] = [
-          '#type' => 'link',
-          '#title' => $this->t('Cancel'),
-          '#url' => Url::fromUri($form['#cancel_url']),
-        ];*/
-
-        $form = $this->buildRedirectForm($form, $form_state, '', $options, '');
+        //$form = $this->buildRedirectForm($form, $form_state, '', $options, '');
         return $form;
     }
     /**
@@ -109,67 +117,5 @@ class RocketfuelForm extends BasePaymentOffsiteForm
         ];
 
         return $form;
-    }
-
-    /**
-     * Calculate Checksum of Rave Payload.
-     *
-     * For more: https://flutterwavedevelopers.readme.io/docs/checksum.
-     */
-    protected function calculateChecksum(array $options)
-    {
-        ksort($options);
-
-        $hashedPayload = '';
-
-        foreach ($options as $key => $value) {
-            $hashedPayload .= $value;
-        }
-
-        /** @var Drupalcommerce_ravePluginCommercePaymentGatewayRocketfuelInterface $plugin */
-        $plugin = $this->plugin;
-
-        $completeHash = $hashedPayload . $plugin->getPassword();
-        $hash = hash('sha256', $completeHash);
-
-        $this->integrityHash = $hash;
-    }
-
-    private function getMerchantAuth($public_key, $merchant_id)
-    {
-        $out = "";
-        $cert = $public_key;
-        $to_crypt = $merchant_id;
-
-        $public_key = openssl_pkey_get_public($cert);
-
-        $key_lenght = openssl_pkey_get_details($public_key);
-
-        $part_len = $key_lenght['bits'] / 8 - 11;
-
-        $parts = str_split($to_crypt, $part_len);
-
-        foreach ($parts as $part) {
-
-            $encrypted_temp = '';
-
-            openssl_public_encrypt($part, $encrypted_temp, $public_key, OPENSSL_PKCS1_OAEP_PADDING);
-
-            $out .=  $encrypted_temp;
-        }
-
-        return base64_encode($out);
-    }
-
-    public function getEndpoint($environment)
-    {
-        $environmentData = [
-            'prod' => 'https://app.rocketfuelblockchain.com/api',
-            'dev' => 'https://dev-app.rocketdemo.net/api',
-            'stage2' => 'https://qa-app.rocketdemo.net/api',
-            'preprod' => 'https://preprod-app.rocketdemo.net/api',
-        ];
-
-        return isset($environmentData[$environment]) ? $environmentData[$environment] : 'https://qa-app.rocketdemo.net/api';
     }
 }
