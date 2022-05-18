@@ -10,102 +10,73 @@ use Drupal\Core\Url;
 
 class RocketfuelForm extends BasePaymentOffsiteForm
 {
-    protected $integrityHash;
-    /**
-     * {@inheritdoc}
-     */
+    use RocketFuelPaymentHelper;
+
     public function buildConfigurationForm(array $form, FormStateInterface $form_state)
     {
         $form = parent::buildConfigurationForm($form, $form_state);
 
-        /** @var \Drupal\commerce_payment\Entity\PaymentInterface $payment */
+        /** @var Drupalcommerce_paymentEntityPaymentInterface $payment */
         $payment = $this->entity;
-        /** @var \Drupal\commerce_rocketfuel\Plugin\Commerce\PaymentGateway\RocketfuelInterface $plugin */
+
+        $payment->save();
+
+        /** @var Drupalcommerce_rocketfuelPluginCommercePaymentGatewayRocketfuelInterface $plugin */
         $plugin = $payment->getPaymentGateway()->getPlugin();
-        $environment = $plugin->getEnvironment();
 
-        /** @var \Drupal\commerce_order\Entity\OrderInterface $order */
+        /** @var Drupalcommerce_orderEntityOrderInterface $order */
         $order = $payment->getOrder();
+        $billingAddress = $order->getBillingProfile()->address->first();
 
-        // Adds information about the billing profile.
-        if ($billing_profile = $order->getBillingProfile()) {
-            /** @var \Drupal\address\AddressInterface $address */
-            $address = $billing_profile->get('address')->first();
-            $fields = [
-                [
-                    'display_name' => 'Billing First Name',
-                    'variable_name' => 'first_name',
-                    'value' => $address->getGivenName(),
-                ],
-                [
-                    'display_name' => 'Billing Surname',
-                    'variable_name' => 'last_name',
-                    'value' => $address->getFamilyName(),
-                ]
+
+        foreach($order->getItems() as $item){
+            $options['cart'][] = [
+                'id' => $item->getPurchasedEntityId(),
+                'name' => $item->getTitle(),
+                'price' => $item->getUnitPrice()->getNumber(),
+                'quantity' => $item->getQuantity()
             ];
         }
 
-        // Get total order price.
-        $amount = $payment->getAmount();
-
-        // $transactionData = [
-        //   'reference' => $order->uuid(),
-        //   'amount' => $amount->getNumber() * 100, // Convert to kobo.
-        //   'email' => $order->getEmail(),
-        //   'callback_url' => $form['#return_url'],
-        //   'metadata' => [
-        //     'cancel_action' => $form['#cancel_url'],
-        //   ],
-        // ];
-        $transactionData = [
-            'reference' => 'ddddddd',
-            'amount' => 100, // Convert to kobo.
-            'email' => 're@gmail.com',
-            'callback_url' => $form['#return_url'],
-            'metadata' => [
-                'cancel_action' => $form['#cancel_url'],
+        $data = [
+            'cred' => [
+                'email'=>$plugin->getEmail(),
+                'password'=>$plugin->getPassword()
             ],
+            'endpoint' => $this->getEndpoint($plugin->getEnvironment()),
+            'body' => [
+                'amount' => (string)$payment->getAmount()->getNumber(),
+                'cart' => $options['cart'],
+                'merchant_id' => $plugin->getMerchantId(),
+                'currency' =>  $payment->getAmount()->getCurrencyCode(),
+                'order' => (string)$payment->getOrderId(),
+                'redirectUrl' => \Drupal::request()->getSchemeAndHttpHost().'/payment/notify/'.$payment->getPaymentGateway()->id()
+            ]
         ];
-        if (isset($fields)) {
-            $transactionData['metadata']['custom_fields'] = $fields;
-        }
-        // if ($gateway_mode == 'live') {
-        //     $form['#attached']['library'][] = 'commerce_rave/rave_live';
-        //   }
-        //   else {
-        //     $form['#attached']['library'][] = 'commerce_rave/rave_staging';
-        //   }
-
-        //   $form['#attached']['library'][] = 'commerce_rave/rave';
 
         $options = [
-            "PBFPubKey" => $plugin->getPublicKey(),
-            "amount" => $payment_amount,
+            "merchant_auth" => $this->getMerchantAuth($plugin->getMerchantId()),
+            "amount" => /*$payment_amount*/$payment->getAmount()->getNumber(),
             "customer_email" => $order->getEmail(),
             "customer_firstname" => $billingAddress->getGivenName(),
             "customer_lastname" => $billingAddress->getFamilyName(),
-            "custom_logo" => Url::fromUri('internal:' . theme_get_setting('logo.url'), ['absolute' => TRUE])
-                ->toString(),
-            "txref" => $plugin->getTransactionReferencePrefix() . '-' . $payment->getOrderId(),
-            "payment_method" => 'both',
-            "country" => $billingAddress->getCountryCode(),
-            "currency" => $payment->getAmount()->getCurrencyCode(),
-            "custom_title" => \Drupal::config('system.site')->get('name'),
-            "custom_description" => \Drupal::config('system.site')->get('slogan'),
-            "pay_button_text" => $plugin->getPayButtonText(),
+            "uuid" => $this->getUUID($data),
             "redirect_url" => $form['#return_url'],
+            "environment"=>$plugin->getEnvironment(),
+            "notifyUrl" => \Drupal::request()->getSchemeAndHttpHost().'/payment/notify/'.$payment->getPaymentGateway()->id()
         ];
 
+        $options['continueurl'] = $form['#return_url'];
+        //$options['cancelurl'] = $form['#cancel_url'];
+        //$payment->save();
+        $options['payment_id'] = $payment->id();
 
 
-        $form = $this->buildRedirectForm($form, $form_state, '', $options, '');
+        $form['#attached']['drupalSettings']['rocketfuel'] = json_encode($options);
+        $form['#attached']['library'][] = 'commerce_rocketfuel/checkout';
 
-        $this->calculateChecksum($options);
 
-        $options = array_merge($options, ['integrity_hash' => $this->integrityHash]);
-
-        $form['#attached']['drupalSettings']['rocketfuel']['transactionData'] = json_encode($options);
-
+        //$form = $this->buildRedirectForm($form, $form_state, '', $options, '');
         return $form;
     }
     /**
@@ -132,7 +103,7 @@ class RocketfuelForm extends BasePaymentOffsiteForm
         // if (array_key_exists('hosted_payment', $data) && $data['hosted_payment'] === 1) {
         //     $helpMessage = t('Please wait while you are redirected to the payment server. If nothing happens within 10 seconds, please click on the button below.');
         // } else {
-            $helpMessage = t('Please wait while the payment server loads. If nothing happens within 10 seconds, please click on the button below.');
+        $helpMessage = t('Please wait while the payment server loads. If nothing happens within 10 seconds, please click on the button below.');
         // }
 
         $form['commerce_message'] = [
@@ -146,29 +117,5 @@ class RocketfuelForm extends BasePaymentOffsiteForm
         ];
 
         return $form;
-    }
-
-    /**
-     * Calculate Checksum of Rave Payload.
-     *
-     * For more: https://flutterwavedevelopers.readme.io/docs/checksum.
-     */
-    protected function calculateChecksum(array $options)
-    {
-        ksort($options);
-
-        $hashedPayload = '';
-
-        foreach ($options as $key => $value) {
-            $hashedPayload .= $value;
-        }
-
-        /** @var \Drupal\commerce_rave\Plugin\Commerce\PaymentGateway\RocketfuelInterface $plugin */
-        $plugin = $this->plugin;
-
-        $completeHash = $hashedPayload . $plugin->getPassword();
-        $hash = hash('sha256', $completeHash);
-
-        $this->integrityHash = $hash;
     }
 }

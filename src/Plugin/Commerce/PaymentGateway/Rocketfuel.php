@@ -35,6 +35,15 @@ class Rocketfuel extends OffsitePaymentGatewayBase implements RocketfuelInterfac
     {
         return $this->configuration['public_key'];
     }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function getMerchantId()
+    {
+        return $this->configuration['merchant_id'];
+    }
+
     /**
      * {@inheritdoc}
      */
@@ -62,11 +71,12 @@ class Rocketfuel extends OffsitePaymentGatewayBase implements RocketfuelInterfac
     public function defaultConfiguration()
     {
         return [
-            'public_key' => '',
-            'password' => '',
-            'email' => '',
-            'environment' => 'production'
-        ] + parent::defaultConfiguration();
+                'public_key' => '',
+                'merchant_id' => '',
+                'password' => '',
+                'email' => '',
+                'environment' => 'dev'
+            ] + parent::defaultConfiguration();
     }
     /**
      * {@inheritdoc}
@@ -76,11 +86,20 @@ class Rocketfuel extends OffsitePaymentGatewayBase implements RocketfuelInterfac
         $form = parent::buildConfigurationForm($form, $form_state);
 
         $form['public_key'] = [
-            '#type' => 'textfield',
+            '#type' => 'textarea',
             '#title' => $this->t('Public Key'),
             '#default_value' => $this->getPublicKey(),
             '#required' => TRUE,
         ];
+
+        $form['merchant_id'] = [
+            '#type' => 'textfield',
+            '#title' => $this->t('Merchant ID'),
+            '#default_value' => $this->getMerchantId(),
+            '#required' => TRUE,
+        ];
+
+
         $form['password'] = [
             '#type' => 'password',
             '#title' => $this->t('Password'),
@@ -94,9 +113,19 @@ class Rocketfuel extends OffsitePaymentGatewayBase implements RocketfuelInterfac
             '#required' => TRUE,
         ];
         $form['environment'] = [
-            '#type' => 'textfield',
+            '#type' => 'select',
             '#title' => $this->t('Environment'),
             '#default_value' => $this->getEnvironment(),
+            '#options' => [
+                'prod' => $this
+                    ->t('Production'),
+                'dev' => $this
+                    ->t('Development'),
+                'preprod' => $this
+                    ->t('Pre Production'),
+                'stage2' => $this
+                    ->t('QA'),
+            ],
             '#required' => TRUE,
         ];
 
@@ -112,14 +141,16 @@ class Rocketfuel extends OffsitePaymentGatewayBase implements RocketfuelInterfac
         if (!$form_state->getErrors()) {
 
             $values = $form_state->getValue($form['#parents']);
-            
+
             $public_key = $values['public_key'];
-            
+
             if (!is_string($public_key)) {
 
                 $form_state->setError($form['public_key'], $this->t('A Valid rocketfuel Secret Key is needed'));
-                
+
             }
+
+            //validate the merchant id
         }
     }
     /**
@@ -131,6 +162,61 @@ class Rocketfuel extends OffsitePaymentGatewayBase implements RocketfuelInterfac
         if (!$form_state->getErrors()) {
             $values = $form_state->getValue($form['#parents']);
             $this->configuration['public_key'] = $values['public_key'];
+            $this->configuration['merchant_id'] = $values['merchant_id'];
+            $this->configuration['password'] = $values['password'];
+            $this->configuration['email'] = $values['email'];
+            $this->configuration['environment'] = $values['environment'];
         }
+    }
+
+    public function onCancel(OrderInterface $order, Request $request) {
+        $this->messenger()->addMessage($this->t('You have canceled checkout at RocketFuel but may resume the checkout process here when you are ready.', [
+            '@gateway' => $this->getDisplayLabel(),
+        ]));
+    }
+
+    public function onNotify(Request $request) {
+        parent::onNotify($request);
+
+        if (!empty($this->configuration['api_logging']['response'])) {
+            \Drupal::logger('commerce_rocketfuel')
+                ->debug('e-Commerce notification: <pre>@body</pre>', [
+                    '@body' => var_export($request->query->all(), TRUE),
+                ]);
+        }
+
+
+        $status = $request->request->get('status');
+        $mode = $request->request->get('mode');
+        $payment_id = $request->request->get('payment_id');
+
+        $payment_storage = $this->entityTypeManager->getStorage('commerce_payment');
+        $payment = $payment_storage->load($payment_id);
+
+
+        switch ($mode) {
+            case 'Bank/Exchange':
+                if($status == 0){
+                    $payment->set('state', 'completed');
+                    $payment->save();
+                    return json_encode(true);
+                }
+                break;
+            case 'Wallet':
+                if($status == 'completed'){
+                    $payment->set('state', 'completed');
+                    $payment->save();
+                    /*$capture_transition = $payment->getState()->getWorkflow()->getTransition('capture');
+                    $payment->getState()->applyTransition($capture_transition);
+                    $payment->save();*/
+                    return json_encode(true);
+                }
+                break;
+            default:
+                return json_encode(false);
+                break;
+        }
+
+
     }
 }
